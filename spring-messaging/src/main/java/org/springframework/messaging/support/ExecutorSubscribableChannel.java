@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,8 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
 
+import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
-import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
@@ -36,30 +36,32 @@ import org.springframework.messaging.SubscribableChannel;
  */
 public class ExecutorSubscribableChannel extends AbstractSubscribableChannel {
 
+	@Nullable
 	private final Executor executor;
 
-	private final List<ExecutorChannelInterceptor> executorInterceptors = new ArrayList<ExecutorChannelInterceptor>(4);
+	private final List<ExecutorChannelInterceptor> executorInterceptors = new ArrayList<>(4);
 
 
 	/**
-	 * Create a new {@link ExecutorSubscribableChannel} instance where messages will be sent
-	 * in the callers thread.
+	 * Create a new {@link ExecutorSubscribableChannel} instance
+	 * where messages will be sent in the callers thread.
 	 */
 	public ExecutorSubscribableChannel() {
 		this(null);
 	}
 
 	/**
-	 * Create a new {@link ExecutorSubscribableChannel} instance where messages will be sent
-	 * via the specified executor.
-	 * @param executor the executor used to send the message or {@code null} to execute in
-	 *        the callers thread.
+	 * Create a new {@link ExecutorSubscribableChannel} instance
+	 * where messages will be sent via the specified executor.
+	 * @param executor the executor used to send the message,
+	 * or {@code null} to execute in the callers thread.
 	 */
-	public ExecutorSubscribableChannel(Executor executor) {
+	public ExecutorSubscribableChannel(@Nullable Executor executor) {
 		this.executor = executor;
 	}
 
 
+	@Nullable
 	public Executor getExecutor() {
 		return this.executor;
 	}
@@ -85,10 +87,9 @@ public class ExecutorSubscribableChannel extends AbstractSubscribableChannel {
 
 
 	@Override
-	public boolean sendInternal(final Message<?> message, long timeout) {
-		for (MessageHandler subscriber : getSubscribers()) {
-			ExecutorChannelInterceptorChain chain = new ExecutorChannelInterceptorChain();
-			SendTask sendTask = new SendTask(message, this, subscriber, chain);
+	public boolean sendInternal(Message<?> message, long timeout) {
+		for (MessageHandler handler : getSubscribers()) {
+			SendTask sendTask = new SendTask(message, handler);
 			if (this.executor == null) {
 				sendTask.run();
 			}
@@ -101,87 +102,81 @@ public class ExecutorSubscribableChannel extends AbstractSubscribableChannel {
 
 
 	/**
-	 * Helps with the invocation of the target MessageHandler and interceptors.
+	 * Invoke a MessageHandler with ExecutorChannelInterceptors.
 	 */
-	private static class SendTask implements Runnable {
+	private class SendTask implements MessageHandlingRunnable {
 
 		private final Message<?> inputMessage;
 
-		private final MessageChannel channel;
+		private final MessageHandler messageHandler;
 
-		private final MessageHandler handler;
+		private int interceptorIndex = -1;
 
-		private final ExecutorChannelInterceptorChain chain;
-
-
-		public SendTask(Message<?> message, MessageChannel channel, MessageHandler handler,
-				ExecutorChannelInterceptorChain chain) {
-
+		public SendTask(Message<?> message, MessageHandler messageHandler) {
 			this.inputMessage = message;
-			this.channel = channel;
-			this.handler = handler;
-			this.chain = chain;
+			this.messageHandler = messageHandler;
+		}
+
+		@Override
+		public Message<?> getMessage() {
+			return this.inputMessage;
+		}
+
+		@Override
+		public MessageHandler getMessageHandler() {
+			return this.messageHandler;
 		}
 
 		@Override
 		public void run() {
 			Message<?> message = this.inputMessage;
 			try {
-				message = chain.applyBeforeHandle(message, this.channel, this.handler);
+				message = applyBeforeHandle(message);
 				if (message == null) {
 					return;
 				}
-				this.handler.handleMessage(message);
-				this.chain.triggerAfterMessageHandled(message, this.channel, this.handler, null);
+				this.messageHandler.handleMessage(message);
+				triggerAfterMessageHandled(message, null);
 			}
 			catch (Exception ex) {
-				this.chain.triggerAfterMessageHandled(message, this.channel, this.handler, ex);
+				triggerAfterMessageHandled(message, ex);
 				if (ex instanceof MessagingException) {
 					throw (MessagingException) ex;
 				}
-				throw new MessageDeliveryException(message,
-						"Failed to handle message to " + this.channel + " in " + this.handler, ex);
+				String description = "Failed to handle " + message + " to " + this + " in " + this.messageHandler;
+				throw new MessageDeliveryException(message, description, ex);
 			}
-			catch (Error ex) {
-				this.chain.triggerAfterMessageHandled(message, this.channel, this.handler,
-						new MessageDeliveryException(message,
-								"Failed to handle message to " + this.channel + " in " + this.handler, ex));
-				throw ex;
+			catch (Throwable err) {
+				String description = "Failed to handle " + message + " to " + this + " in " + this.messageHandler;
+				MessageDeliveryException ex2 = new MessageDeliveryException(message, description, err);
+				triggerAfterMessageHandled(message, ex2);
+				throw ex2;
 			}
 		}
-	}
 
-	/**
-	 * Helps with the invocation of configured executor channel interceptors.
-	 */
-	private class ExecutorChannelInterceptorChain {
-
-		private int interceptorIndex = -1;
-
-
-		public Message<?> applyBeforeHandle(Message<?> message, MessageChannel channel, MessageHandler handler) {
+		@Nullable
+		private Message<?> applyBeforeHandle(Message<?> message) {
+			Message<?> messageToUse = message;
 			for (ExecutorChannelInterceptor interceptor : executorInterceptors) {
-				message = interceptor.beforeHandle(message, channel, handler);
-				if (message == null) {
+				messageToUse = interceptor.beforeHandle(messageToUse, ExecutorSubscribableChannel.this, this.messageHandler);
+				if (messageToUse == null) {
 					String name = interceptor.getClass().getSimpleName();
 					if (logger.isDebugEnabled()) {
 						logger.debug(name + " returned null from beforeHandle, i.e. precluding the send.");
 					}
-					triggerAfterMessageHandled(message, channel, handler, null);
+					triggerAfterMessageHandled(message, null);
 					return null;
 				}
 				this.interceptorIndex++;
 			}
-			return message;
+			return messageToUse;
 		}
 
-		public void triggerAfterMessageHandled(Message<?> message, MessageChannel channel,
-				MessageHandler handler, Exception ex) {
-
+		private void triggerAfterMessageHandled(Message<?> message, @Nullable Exception ex) {
 			for (int i = this.interceptorIndex; i >= 0; i--) {
 				ExecutorChannelInterceptor interceptor = executorInterceptors.get(i);
 				try {
-					interceptor.afterMessageHandled(message, channel, handler, ex);
+					interceptor.afterMessageHandled(message, ExecutorSubscribableChannel.this, this.messageHandler, ex);
 				}
 				catch (Throwable ex2) {
 					logger.error("Exception from afterMessageHandled in " + interceptor, ex2);

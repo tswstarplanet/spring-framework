@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,17 +16,22 @@
 
 package org.springframework.test.context.jdbc;
 
+import org.junit.Rule;
 import org.junit.Test;
-import org.mockito.Mockito;
+import org.junit.rules.ExpectedException;
+
+import org.mockito.BDDMockito;
+
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.annotation.AnnotationConfigurationException;
 import org.springframework.core.io.Resource;
 import org.springframework.test.context.TestContext;
 import org.springframework.test.context.jdbc.SqlConfig.TransactionMode;
 
+import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
-import static org.mockito.Matchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.BDDMockito.*;
 
 /**
  * Unit tests for {@link SqlScriptsTestExecutionListener}.
@@ -40,21 +45,24 @@ public class SqlScriptsTestExecutionListenerTests {
 
 	private final TestContext testContext = mock(TestContext.class);
 
+	@Rule
+	public final ExpectedException exception = ExpectedException.none();
+
 
 	@Test
-	public void missingValueAndScriptsAtClassLevel() throws Exception {
-		Class<?> clazz = MissingValueAndScriptsAtClassLevel.class;
-		Mockito.<Class<?>> when(testContext.getTestClass()).thenReturn(clazz);
-		when(testContext.getTestMethod()).thenReturn(clazz.getDeclaredMethod("foo"));
+	public void missingValueAndScriptsAndStatementsAtClassLevel() throws Exception {
+		Class<?> clazz = MissingValueAndScriptsAndStatementsAtClassLevel.class;
+		BDDMockito.<Class<?>> given(testContext.getTestClass()).willReturn(clazz);
+		given(testContext.getTestMethod()).willReturn(clazz.getDeclaredMethod("foo"));
 
 		assertExceptionContains(clazz.getSimpleName() + ".sql");
 	}
 
 	@Test
-	public void missingValueAndScriptsAtMethodLevel() throws Exception {
-		Class<?> clazz = MissingValueAndScriptsAtMethodLevel.class;
-		Mockito.<Class<?>> when(testContext.getTestClass()).thenReturn(clazz);
-		when(testContext.getTestMethod()).thenReturn(clazz.getDeclaredMethod("foo"));
+	public void missingValueAndScriptsAndStatementsAtMethodLevel() throws Exception {
+		Class<?> clazz = MissingValueAndScriptsAndStatementsAtMethodLevel.class;
+		BDDMockito.<Class<?>> given(testContext.getTestClass()).willReturn(clazz);
+		given(testContext.getTestMethod()).willReturn(clazz.getDeclaredMethod("foo"));
 
 		assertExceptionContains(clazz.getSimpleName() + ".foo" + ".sql");
 	}
@@ -62,22 +70,29 @@ public class SqlScriptsTestExecutionListenerTests {
 	@Test
 	public void valueAndScriptsDeclared() throws Exception {
 		Class<?> clazz = ValueAndScriptsDeclared.class;
-		Mockito.<Class<?>> when(testContext.getTestClass()).thenReturn(clazz);
-		when(testContext.getTestMethod()).thenReturn(clazz.getDeclaredMethod("foo"));
+		BDDMockito.<Class<?>> given(testContext.getTestClass()).willReturn(clazz);
+		given(testContext.getTestMethod()).willReturn(clazz.getDeclaredMethod("foo"));
 
-		assertExceptionContains("Only one declaration of SQL script paths is permitted");
+		exception.expect(AnnotationConfigurationException.class);
+		exception.expectMessage(either(
+				containsString("attribute 'value' and its alias 'scripts'")).or(
+				containsString("attribute 'scripts' and its alias 'value'")));
+		exception.expectMessage(either(containsString("values of [{foo}] and [{bar}]")).or(
+				containsString("values of [{bar}] and [{foo}]")));
+		exception.expectMessage(containsString("but only one is permitted"));
+		listener.beforeTestMethod(testContext);
 	}
 
 	@Test
 	public void isolatedTxModeDeclaredWithoutTxMgr() throws Exception {
 		ApplicationContext ctx = mock(ApplicationContext.class);
-		when(ctx.getResource(anyString())).thenReturn(mock(Resource.class));
-		when(ctx.getAutowireCapableBeanFactory()).thenReturn(mock(AutowireCapableBeanFactory.class));
+		given(ctx.getResource(anyString())).willReturn(mock(Resource.class));
+		given(ctx.getAutowireCapableBeanFactory()).willReturn(mock(AutowireCapableBeanFactory.class));
 
 		Class<?> clazz = IsolatedWithoutTxMgr.class;
-		Mockito.<Class<?>> when(testContext.getTestClass()).thenReturn(clazz);
-		when(testContext.getTestMethod()).thenReturn(clazz.getDeclaredMethod("foo"));
-		when(testContext.getApplicationContext()).thenReturn(ctx);
+		BDDMockito.<Class<?>> given(testContext.getTestClass()).willReturn(clazz);
+		given(testContext.getTestMethod()).willReturn(clazz.getDeclaredMethod("foo"));
+		given(testContext.getApplicationContext()).willReturn(ctx);
 
 		assertExceptionContains("cannot execute SQL scripts using Transaction Mode [ISOLATED] without a PlatformTransactionManager");
 	}
@@ -85,13 +100,13 @@ public class SqlScriptsTestExecutionListenerTests {
 	@Test
 	public void missingDataSourceAndTxMgr() throws Exception {
 		ApplicationContext ctx = mock(ApplicationContext.class);
-		when(ctx.getResource(anyString())).thenReturn(mock(Resource.class));
-		when(ctx.getAutowireCapableBeanFactory()).thenReturn(mock(AutowireCapableBeanFactory.class));
+		given(ctx.getResource(anyString())).willReturn(mock(Resource.class));
+		given(ctx.getAutowireCapableBeanFactory()).willReturn(mock(AutowireCapableBeanFactory.class));
 
 		Class<?> clazz = MissingDataSourceAndTxMgr.class;
-		Mockito.<Class<?>> when(testContext.getTestClass()).thenReturn(clazz);
-		when(testContext.getTestMethod()).thenReturn(clazz.getDeclaredMethod("foo"));
-		when(testContext.getApplicationContext()).thenReturn(ctx);
+		BDDMockito.<Class<?>> given(testContext.getTestClass()).willReturn(clazz);
+		given(testContext.getTestMethod()).willReturn(clazz.getDeclaredMethod("foo"));
+		given(testContext.getApplicationContext()).willReturn(ctx);
 
 		assertExceptionContains("supply at least a DataSource or PlatformTransactionManager");
 	}
@@ -111,13 +126,13 @@ public class SqlScriptsTestExecutionListenerTests {
 	// -------------------------------------------------------------------------
 
 	@Sql
-	static class MissingValueAndScriptsAtClassLevel {
+	static class MissingValueAndScriptsAndStatementsAtClassLevel {
 
 		public void foo() {
 		}
 	}
 
-	static class MissingValueAndScriptsAtMethodLevel {
+	static class MissingValueAndScriptsAndStatementsAtMethodLevel {
 
 		@Sql
 		public void foo() {

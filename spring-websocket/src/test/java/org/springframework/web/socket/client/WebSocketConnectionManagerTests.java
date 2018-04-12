@@ -21,16 +21,17 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.junit.Test;
+
 import org.springframework.context.Lifecycle;
 import org.springframework.http.HttpHeaders;
 import org.springframework.util.concurrent.ListenableFuture;
 import org.springframework.util.concurrent.ListenableFutureTask;
 import org.springframework.web.socket.WebSocketHandler;
+import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.LoggingWebSocketHandlerDecorator;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.web.socket.handler.WebSocketHandlerDecorator;
-import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import static org.junit.Assert.*;
@@ -111,13 +112,17 @@ public class WebSocketConnectionManagerTests {
 		}
 
 		@Override
-		public ListenableFuture<WebSocketSession> doHandshake(WebSocketHandler handler, String uriTemplate, Object... uriVars) {
+		public ListenableFuture<WebSocketSession> doHandshake(WebSocketHandler handler,
+				String uriTemplate, Object... uriVars) {
+
 			URI uri = UriComponentsBuilder.fromUriString(uriTemplate).buildAndExpand(uriVars).encode().toUri();
 			return doHandshake(handler, null, uri);
 		}
 
 		@Override
-		public ListenableFuture<WebSocketSession> doHandshake(WebSocketHandler handler, WebSocketHttpHeaders headers, URI uri) {
+		public ListenableFuture<WebSocketSession> doHandshake(WebSocketHandler handler,
+				WebSocketHttpHeaders headers, URI uri) {
+
 			this.webSocketHandler = handler;
 			this.headers = headers;
 			this.uri = uri;

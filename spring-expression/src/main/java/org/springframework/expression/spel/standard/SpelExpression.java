@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import org.springframework.expression.spel.SpelNode;
 import org.springframework.expression.spel.SpelParserConfiguration;
 import org.springframework.expression.spel.ast.SpelNodeImpl;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 /**
@@ -40,6 +41,7 @@ import org.springframework.util.Assert;
  * references to types, beans, properties, and methods.
  *
  * @author Andy Clement
+ * @author Juergen Hoeller
  * @since 3.0
  */
 public class SpelExpression implements Expression {
@@ -57,16 +59,18 @@ public class SpelExpression implements Expression {
 
 	private final SpelParserConfiguration configuration;
 
-	// the default context is used if no override is supplied by the user
+	// The default context is used if no override is supplied by the user
+	@Nullable
 	private EvaluationContext evaluationContext;
 
 	// Holds the compiled form of the expression (if it has been compiled)
+	@Nullable
 	private CompiledExpression compiledAst;
 
 	// Count of many times as the expression been interpreted - can trigger compilation
 	// when certain limit reached
 	private volatile int interpretedCount = 0;
-	
+
 	// The number of times compilation was attempted and failed - enables us to eventually
 	// give up trying to compile it when it just doesn't seem to be possible.
 	private volatile int failedAttempts = 0;
@@ -105,36 +109,19 @@ public class SpelExpression implements Expression {
 	// implementing Expression
 
 	@Override
-	public Object getValue() throws EvaluationException {
-		Object result;
-		if (this.compiledAst != null) {
-			try {
-				return this.compiledAst.getValue(null,null);
-			}
-			catch (Throwable ex) {
-				// If running in mixed mode, revert to interpreted
-				if (this.configuration.getCompilerMode() == SpelCompilerMode.MIXED) {
-					this.interpretedCount = 0;
-					this.compiledAst = null;
-				}
-				else {
-					// Running in SpelCompilerMode.immediate mode - propagate exception to caller
-					throw new SpelEvaluationException(ex, SpelMessage.EXCEPTION_RUNNING_COMPILED_EXPRESSION);
-				}
-			}
-		}
-		ExpressionState expressionState = new ExpressionState(getEvaluationContext(), this.configuration);
-		result = this.ast.getValue(expressionState);
-		checkCompile(expressionState);
-		return result;
+	public String getExpressionString() {
+		return this.expression;
 	}
 
 	@Override
-	public Object getValue(Object rootObject) throws EvaluationException {
-		Object result;
+	@Nullable
+	public Object getValue() throws EvaluationException {
 		if (this.compiledAst != null) {
 			try {
-				return this.compiledAst.getValue(rootObject,null);
+				TypedValue contextRoot =
+						(this.evaluationContext != null ? this.evaluationContext.getRootObject() : null);
+				return this.compiledAst.getValue(
+						(contextRoot != null ? contextRoot.getValue() : null), this.evaluationContext);
 			}
 			catch (Throwable ex) {
 				// If running in mixed mode, revert to interpreted
@@ -148,23 +135,29 @@ public class SpelExpression implements Expression {
 				}
 			}
 		}
-		ExpressionState expressionState = new ExpressionState(getEvaluationContext(), toTypedValue(rootObject), this.configuration);
-		result = this.ast.getValue(expressionState);
+
+		ExpressionState expressionState = new ExpressionState(getEvaluationContext(), this.configuration);
+		Object result = this.ast.getValue(expressionState);
 		checkCompile(expressionState);
 		return result;
 	}
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> T getValue(Class<T> expectedResultType) throws EvaluationException {
+	@Nullable
+	public <T> T getValue(@Nullable Class<T> expectedResultType) throws EvaluationException {
 		if (this.compiledAst != null) {
 			try {
-				Object result = this.compiledAst.getValue(null,null);
+				TypedValue contextRoot =
+						(this.evaluationContext != null ? this.evaluationContext.getRootObject() : null);
+				Object result = this.compiledAst.getValue(
+						(contextRoot != null ? contextRoot.getValue() : null), this.evaluationContext);
 				if (expectedResultType == null) {
-					return (T)result;
+					return (T) result;
 				}
 				else {
-					return ExpressionUtils.convertTypedValue(getEvaluationContext(), new TypedValue(result), expectedResultType);
+					return ExpressionUtils.convertTypedValue(
+							getEvaluationContext(), new TypedValue(result), expectedResultType);
 				}
 			}
 			catch (Throwable ex) {
@@ -179,15 +172,45 @@ public class SpelExpression implements Expression {
 				}
 			}
 		}
+
 		ExpressionState expressionState = new ExpressionState(getEvaluationContext(), this.configuration);
 		TypedValue typedResultValue = this.ast.getTypedValue(expressionState);
 		checkCompile(expressionState);
-		return ExpressionUtils.convertTypedValue(expressionState.getEvaluationContext(), typedResultValue, expectedResultType);
+		return ExpressionUtils.convertTypedValue(
+				expressionState.getEvaluationContext(), typedResultValue, expectedResultType);
+	}
+
+	@Override
+	@Nullable
+	public Object getValue(Object rootObject) throws EvaluationException {
+		if (this.compiledAst != null) {
+			try {
+				return this.compiledAst.getValue(rootObject, evaluationContext);
+			}
+			catch (Throwable ex) {
+				// If running in mixed mode, revert to interpreted
+				if (this.configuration.getCompilerMode() == SpelCompilerMode.MIXED) {
+					this.interpretedCount = 0;
+					this.compiledAst = null;
+				}
+				else {
+					// Running in SpelCompilerMode.immediate mode - propagate exception to caller
+					throw new SpelEvaluationException(ex, SpelMessage.EXCEPTION_RUNNING_COMPILED_EXPRESSION);
+				}
+			}
+		}
+
+		ExpressionState expressionState =
+				new ExpressionState(getEvaluationContext(), toTypedValue(rootObject), this.configuration);
+		Object result = this.ast.getValue(expressionState);
+		checkCompile(expressionState);
+		return result;
 	}
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> T getValue(Object rootObject, Class<T> expectedResultType) throws EvaluationException {
+	@Nullable
+	public <T> T getValue(Object rootObject, @Nullable Class<T> expectedResultType) throws EvaluationException {
 		if (this.compiledAst != null) {
 			try {
 				Object result = this.compiledAst.getValue(rootObject, null);
@@ -195,7 +218,8 @@ public class SpelExpression implements Expression {
 					return (T)result;
 				}
 				else {
-					return ExpressionUtils.convertTypedValue(getEvaluationContext(), new TypedValue(result), expectedResultType);
+					return ExpressionUtils.convertTypedValue(
+							getEvaluationContext(), new TypedValue(result), expectedResultType);
 				}
 			}
 			catch (Throwable ex) {
@@ -210,19 +234,24 @@ public class SpelExpression implements Expression {
 				}
 			}
 		}
-		ExpressionState expressionState = new ExpressionState(getEvaluationContext(), toTypedValue(rootObject), this.configuration);
+
+		ExpressionState expressionState =
+				new ExpressionState(getEvaluationContext(), toTypedValue(rootObject), this.configuration);
 		TypedValue typedResultValue = this.ast.getTypedValue(expressionState);
 		checkCompile(expressionState);
-		return ExpressionUtils.convertTypedValue(expressionState.getEvaluationContext(), typedResultValue, expectedResultType);
+		return ExpressionUtils.convertTypedValue(
+				expressionState.getEvaluationContext(), typedResultValue, expectedResultType);
 	}
 
 	@Override
+	@Nullable
 	public Object getValue(EvaluationContext context) throws EvaluationException {
-		Assert.notNull(context, "The EvaluationContext is required");
-		if (compiledAst!= null) {
+		Assert.notNull(context, "EvaluationContext is required");
+
+		if (this.compiledAst != null) {
 			try {
-				Object result = this.compiledAst.getValue(null,context);
-				return result;
+				TypedValue contextRoot = context.getRootObject();
+				return this.compiledAst.getValue(contextRoot.getValue(), context);
 			}
 			catch (Throwable ex) {
 				// If running in mixed mode, revert to interpreted
@@ -236,15 +265,54 @@ public class SpelExpression implements Expression {
 				}
 			}
 		}
+
 		ExpressionState expressionState = new ExpressionState(context, this.configuration);
 		Object result = this.ast.getValue(expressionState);
 		checkCompile(expressionState);
 		return result;
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
+	@Nullable
+	public <T> T getValue(EvaluationContext context, @Nullable Class<T> expectedResultType) throws EvaluationException {
+		Assert.notNull(context, "EvaluationContext is required");
+
+		if (this.compiledAst != null) {
+			try {
+				TypedValue contextRoot = context.getRootObject();
+				Object result = this.compiledAst.getValue(contextRoot.getValue(), context);
+				if (expectedResultType != null) {
+					return ExpressionUtils.convertTypedValue(context, new TypedValue(result), expectedResultType);
+				}
+				else {
+					return (T) result;
+				}
+			}
+			catch (Throwable ex) {
+				// If running in mixed mode, revert to interpreted
+				if (this.configuration.getCompilerMode() == SpelCompilerMode.MIXED) {
+					this.interpretedCount = 0;
+					this.compiledAst = null;
+				}
+				else {
+					// Running in SpelCompilerMode.immediate mode - propagate exception to caller
+					throw new SpelEvaluationException(ex, SpelMessage.EXCEPTION_RUNNING_COMPILED_EXPRESSION);
+				}
+			}
+		}
+
+		ExpressionState expressionState = new ExpressionState(context, this.configuration);
+		TypedValue typedResultValue = this.ast.getTypedValue(expressionState);
+		checkCompile(expressionState);
+		return ExpressionUtils.convertTypedValue(context, typedResultValue, expectedResultType);
+	}
+
+	@Override
+	@Nullable
 	public Object getValue(EvaluationContext context, Object rootObject) throws EvaluationException {
-		Assert.notNull(context, "The EvaluationContext is required");
+		Assert.notNull(context, "EvaluationContext is required");
+
 		if (this.compiledAst != null) {
 			try {
 				return this.compiledAst.getValue(rootObject,context);
@@ -261,6 +329,7 @@ public class SpelExpression implements Expression {
 				}
 			}
 		}
+
 		ExpressionState expressionState = new ExpressionState(context, toTypedValue(rootObject), this.configuration);
 		Object result = this.ast.getValue(expressionState);
 		checkCompile(expressionState);
@@ -269,41 +338,15 @@ public class SpelExpression implements Expression {
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> T getValue(EvaluationContext context, Class<T> expectedResultType) throws EvaluationException {
-		if (this.compiledAst != null) {
-			try {
-				Object result = this.compiledAst.getValue(null,context);
-				if (expectedResultType != null) {
-					return ExpressionUtils.convertTypedValue(context, new TypedValue(result), expectedResultType);
-				}
-				else {
-					return (T) result;
-				}
-			}
-			catch (Throwable ex) {
-				// If running in mixed mode, revert to interpreted
-				if (this.configuration.getCompilerMode() == SpelCompilerMode.MIXED) {
-					this.interpretedCount = 0;
-					this.compiledAst = null;
-				}
-				else {
-					// Running in SpelCompilerMode.immediate mode - propagate exception to caller
-					throw new SpelEvaluationException(ex, SpelMessage.EXCEPTION_RUNNING_COMPILED_EXPRESSION);
-				}
-			}
-		}
-		ExpressionState expressionState = new ExpressionState(context, this.configuration);
-		TypedValue typedResultValue = this.ast.getTypedValue(expressionState);
-		checkCompile(expressionState);
-		return ExpressionUtils.convertTypedValue(context, typedResultValue, expectedResultType);
-	}
+	@Nullable
+	public <T> T getValue(EvaluationContext context, Object rootObject, @Nullable Class<T> expectedResultType)
+			throws EvaluationException {
 
-	@SuppressWarnings("unchecked")
-	@Override
-	public <T> T getValue(EvaluationContext context, Object rootObject, Class<T> expectedResultType) throws EvaluationException {
+		Assert.notNull(context, "EvaluationContext is required");
+
 		if (this.compiledAst != null) {
 			try {
-				Object result = this.compiledAst.getValue(rootObject,context);
+				Object result = this.compiledAst.getValue(rootObject, context);
 				if (expectedResultType != null) {
 					return ExpressionUtils.convertTypedValue(context, new TypedValue(result), expectedResultType);
 				}
@@ -323,6 +366,7 @@ public class SpelExpression implements Expression {
 				}
 			}
 		}
+
 		ExpressionState expressionState = new ExpressionState(context, toTypedValue(rootObject), this.configuration);
 		TypedValue typedResultValue = this.ast.getTypedValue(expressionState);
 		checkCompile(expressionState);
@@ -330,99 +374,108 @@ public class SpelExpression implements Expression {
 	}
 
 	@Override
+	@Nullable
 	public Class<?> getValueType() throws EvaluationException {
 		return getValueType(getEvaluationContext());
 	}
 
 	@Override
+	@Nullable
 	public Class<?> getValueType(Object rootObject) throws EvaluationException {
 		return getValueType(getEvaluationContext(), rootObject);
 	}
 
 	@Override
+	@Nullable
 	public Class<?> getValueType(EvaluationContext context) throws EvaluationException {
-		Assert.notNull(context, "The EvaluationContext is required");
-		ExpressionState eState = new ExpressionState(context, this.configuration);
-		TypeDescriptor typeDescriptor = this.ast.getValueInternal(eState).getTypeDescriptor();
+		Assert.notNull(context, "EvaluationContext is required");
+		ExpressionState expressionState = new ExpressionState(context, this.configuration);
+		TypeDescriptor typeDescriptor = this.ast.getValueInternal(expressionState).getTypeDescriptor();
 		return (typeDescriptor != null ? typeDescriptor.getType() : null);
 	}
 
 	@Override
+	@Nullable
 	public Class<?> getValueType(EvaluationContext context, Object rootObject) throws EvaluationException {
-		ExpressionState eState = new ExpressionState(context, toTypedValue(rootObject), this.configuration);
-		TypeDescriptor typeDescriptor = this.ast.getValueInternal(eState).getTypeDescriptor();
+		ExpressionState expressionState = new ExpressionState(context, toTypedValue(rootObject), this.configuration);
+		TypeDescriptor typeDescriptor = this.ast.getValueInternal(expressionState).getTypeDescriptor();
 		return (typeDescriptor != null ? typeDescriptor.getType() : null);
 	}
 
 	@Override
+	@Nullable
 	public TypeDescriptor getValueTypeDescriptor() throws EvaluationException {
 		return getValueTypeDescriptor(getEvaluationContext());
 	}
 
 	@Override
+	@Nullable
 	public TypeDescriptor getValueTypeDescriptor(Object rootObject) throws EvaluationException {
-		ExpressionState eState = new ExpressionState(getEvaluationContext(), toTypedValue(rootObject), this.configuration);
-		return this.ast.getValueInternal(eState).getTypeDescriptor();
+		ExpressionState expressionState =
+				new ExpressionState(getEvaluationContext(), toTypedValue(rootObject), this.configuration);
+		return this.ast.getValueInternal(expressionState).getTypeDescriptor();
 	}
 
 	@Override
+	@Nullable
 	public TypeDescriptor getValueTypeDescriptor(EvaluationContext context) throws EvaluationException {
-		Assert.notNull(context, "The EvaluationContext is required");
-		ExpressionState eState = new ExpressionState(context, this.configuration);
-		return this.ast.getValueInternal(eState).getTypeDescriptor();
+		Assert.notNull(context, "EvaluationContext is required");
+		ExpressionState expressionState = new ExpressionState(context, this.configuration);
+		return this.ast.getValueInternal(expressionState).getTypeDescriptor();
 	}
 
 	@Override
-	public TypeDescriptor getValueTypeDescriptor(EvaluationContext context, Object rootObject) throws EvaluationException {
-		Assert.notNull(context, "The EvaluationContext is required");
-		ExpressionState eState = new ExpressionState(context, toTypedValue(rootObject), this.configuration);
-		return this.ast.getValueInternal(eState).getTypeDescriptor();
-	}
+	@Nullable
+	public TypeDescriptor getValueTypeDescriptor(EvaluationContext context, Object rootObject)
+			throws EvaluationException {
 
-	@Override
-	public String getExpressionString() {
-		return this.expression;
-	}
-
-	@Override
-	public boolean isWritable(EvaluationContext context) throws EvaluationException {
-		Assert.notNull(context, "The EvaluationContext is required");
-		return this.ast.isWritable(new ExpressionState(context, this.configuration));
+		Assert.notNull(context, "EvaluationContext is required");
+		ExpressionState expressionState = new ExpressionState(context, toTypedValue(rootObject), this.configuration);
+		return this.ast.getValueInternal(expressionState).getTypeDescriptor();
 	}
 
 	@Override
 	public boolean isWritable(Object rootObject) throws EvaluationException {
-		return this.ast.isWritable(new ExpressionState(getEvaluationContext(), toTypedValue(rootObject), this.configuration));
+		return this.ast.isWritable(
+				new ExpressionState(getEvaluationContext(), toTypedValue(rootObject), this.configuration));
+	}
+
+	@Override
+	public boolean isWritable(EvaluationContext context) throws EvaluationException {
+		Assert.notNull(context, "EvaluationContext is required");
+		return this.ast.isWritable(new ExpressionState(context, this.configuration));
 	}
 
 	@Override
 	public boolean isWritable(EvaluationContext context, Object rootObject) throws EvaluationException {
-		Assert.notNull(context, "The EvaluationContext is required");
+		Assert.notNull(context, "EvaluationContext is required");
 		return this.ast.isWritable(new ExpressionState(context, toTypedValue(rootObject), this.configuration));
 	}
 
 	@Override
-	public void setValue(EvaluationContext context, Object value) throws EvaluationException {
-		Assert.notNull(context, "The EvaluationContext is required");
+	public void setValue(Object rootObject, @Nullable Object value) throws EvaluationException {
+		this.ast.setValue(
+				new ExpressionState(getEvaluationContext(), toTypedValue(rootObject), this.configuration), value);
+	}
+
+	@Override
+	public void setValue(EvaluationContext context, @Nullable Object value) throws EvaluationException {
+		Assert.notNull(context, "EvaluationContext is required");
 		this.ast.setValue(new ExpressionState(context, this.configuration), value);
 	}
 
 	@Override
-	public void setValue(Object rootObject, Object value) throws EvaluationException {
-		this.ast.setValue(new ExpressionState(getEvaluationContext(), toTypedValue(rootObject), this.configuration), value);
-	}
+	public void setValue(EvaluationContext context, Object rootObject, @Nullable Object value)
+			throws EvaluationException {
 
-	@Override
-	public void setValue(EvaluationContext context, Object rootObject, Object value) throws EvaluationException {
-		Assert.notNull(context, "The EvaluationContext is required");
+		Assert.notNull(context, "EvaluationContext is required");
 		this.ast.setValue(new ExpressionState(context, toTypedValue(rootObject), this.configuration), value);
 	}
 
 
-	// impl only
-
 	/**
-	 * Compile the expression if it has been evaluated more than the threshold number of times to trigger compilation.
+	 * Compile the expression if it has been evaluated more than the threshold number
+	 * of times to trigger compilation.
 	 * @param expressionState the expression state used to determine compilation mode
 	 */
 	private void checkCompile(ExpressionState expressionState) {
@@ -445,8 +498,8 @@ public class SpelExpression implements Expression {
 
 
 	/**
-	 * Perform expression compilation. This will only succeed once exit descriptors for all nodes have 
-	 * been determined. If the compilation fails and has failed more than 100 times the expression is 
+	 * Perform expression compilation. This will only succeed once exit descriptors for all nodes have
+	 * been determined. If the compilation fails and has failed more than 100 times the expression is
 	 * no longer considered suitable for compilation.
 	 */
 	public boolean compileExpression() {
@@ -482,29 +535,24 @@ public class SpelExpression implements Expression {
 	}
 
 	/**
-	 * @return return the Abstract Syntax Tree for the expression
+	 * Return the Abstract Syntax Tree for the expression.
 	 */
 	public SpelNode getAST() {
 		return this.ast;
 	}
 
 	/**
-	 * Produce a string representation of the Abstract Syntax Tree for the expression, this should ideally look like the
-	 * input expression, but properly formatted since any unnecessary whitespace will have been discarded during the
-	 * parse of the expression.
+	 * Produce a string representation of the Abstract Syntax Tree for the expression.
+	 * This should ideally look like the input expression, but properly formatted since any
+	 * unnecessary whitespace will have been discarded during the parse of the expression.
 	 * @return the string representation of the AST
 	 */
 	public String toStringAST() {
 		return this.ast.toStringAST();
 	}
 
-	private TypedValue toTypedValue(Object object) {
-		if (object == null) {
-			return TypedValue.NULL;
-		}
-		else {
-			return new TypedValue(object);
-		}
+	private TypedValue toTypedValue(@Nullable Object object) {
+		return (object != null ? new TypedValue(object) : TypedValue.NULL);
 	}
 
 }

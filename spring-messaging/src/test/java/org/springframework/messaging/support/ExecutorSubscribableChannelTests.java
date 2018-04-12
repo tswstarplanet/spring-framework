@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,8 @@
 
 package org.springframework.messaging.support;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -24,17 +26,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.messaging.MessageHandler;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
-import static org.junit.Assert.assertEquals;
 import static org.mockito.BDDMockito.*;
 
 /**
@@ -170,7 +170,7 @@ public class ExecutorSubscribableChannelTests {
 	@Test
 	public void interceptorWithException() {
 		IllegalStateException expected = new IllegalStateException("Fake exception");
-		doThrow(expected).when(this.handler).handleMessage(this.message);
+		willThrow(expected).given(this.handler).handleMessage(this.message);
 		BeforeHandleInterceptor interceptor = new BeforeHandleInterceptor();
 		this.channel.addInterceptor(interceptor);
 		this.channel.subscribe(this.handler);
@@ -193,7 +193,6 @@ public class ExecutorSubscribableChannelTests {
 
 		private volatile boolean afterHandledInvoked;
 
-
 		public AtomicInteger getCounter() {
 			return this.counter;
 		}
@@ -215,17 +214,19 @@ public class ExecutorSubscribableChannelTests {
 		}
 	}
 
+
 	private static class BeforeHandleInterceptor extends AbstractTestInterceptor {
 
 		private Message<?> messageToReturn;
 
 		private RuntimeException exceptionToRaise;
 
-
 		public void setMessageToReturn(Message<?> messageToReturn) {
 			this.messageToReturn = messageToReturn;
 		}
 
+		// TODO Determine why setExceptionToRaise() is unused.
+		@SuppressWarnings("unused")
 		public void setExceptionToRaise(RuntimeException exception) {
 			this.exceptionToRaise = exception;
 		}
@@ -239,6 +240,7 @@ public class ExecutorSubscribableChannelTests {
 			return (this.messageToReturn != null ? this.messageToReturn : message);
 		}
 	}
+
 
 	private static class NullReturningBeforeHandleInterceptor extends AbstractTestInterceptor {
 

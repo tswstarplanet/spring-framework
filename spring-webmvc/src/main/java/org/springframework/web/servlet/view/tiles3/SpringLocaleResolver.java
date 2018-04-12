@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2012 the original author or authors.
+ * Copyright 2002-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,14 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.web.servlet.view.tiles3;
 
 import java.util.Locale;
 import javax.servlet.http.HttpServletRequest;
+
 import org.apache.tiles.locale.impl.DefaultLocaleResolver;
 import org.apache.tiles.request.Request;
 import org.apache.tiles.request.servlet.NotAServletEnvironmentException;
 import org.apache.tiles.request.servlet.ServletUtil;
+
 import org.springframework.web.servlet.support.RequestContextUtils;
 
 /**
@@ -44,8 +47,8 @@ public class SpringLocaleResolver extends DefaultLocaleResolver {
 				return RequestContextUtils.getLocale(servletRequest);
 			}
 		}
-		catch (NotAServletEnvironmentException e) {
-			// Ignore
+		catch (NotAServletEnvironmentException ex) {
+			// ignore
 		}
 		return super.resolveLocale(request);
 	}

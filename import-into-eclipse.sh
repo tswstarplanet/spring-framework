@@ -8,29 +8,22 @@ Spring Framework - Eclipse/STS Project Import Guide
 This script will guide you through the process of importing the Spring
 Framework projects into Eclipse or the Spring Tool Suite (STS). It is
 recommended that you have a recent version of Eclipse or STS. As a bare
-minimum you will need Eclipse with full Java 8 support, AJDT, and the
-Groovy Compiler.
+minimum you will need Eclipse with full Java 8 support, the AspectJ
+Development Tools (AJDT), and the Groovy Compiler.
 
 This script has been tested against:
 
-- Eclipse: integration build I20140528-2000 (Luna 4.4)
-- STS:     nightly build 3.6.0.CI-B1890632 (Luna 4.4)
-- AJDT:    CI build AJDT-AE44-66 (Luna 4.4)
+- STS:     3.8.3.RELEASE (Eclipse Neon.2 4.6.2)
+- AJDT:    2.2.4.201612122115 (Eclipse Neon 4.6)
 
 If you need to download and install Eclipse or STS, please do that now
 by visiting one of the following sites:
 
-- Eclipse downloads: http://download.eclipse.org/eclipse/downloads/
+- Eclipse downloads: http://download.eclipse.org/eclipse/downloads
 - STS downloads: http://spring.io/tools/sts/all
 - STS nightly builds: http://dist.springsource.com/snapshot/STS/nightly-distributions.html
-
-If you need to install a recent CI build for AJDT (i.e., so that the
-spring-aspects module properly compiles in Eclipse/STS), click on the
-"Artifacts" tab of a successful CI build and copy the link to the
-"update site" which you can then use to install or update AJDT within
-Eclipse/STS.
-
-- AJDT CI builds: https://build.spring.io/browse/AJDT-AE44
+- ADJT: http://www.eclipse.org/ajdt/downloads/
+- Groovy Eclipse: https://github.com/groovy/groovy-eclipse/wiki
 
 Once Eclipse/STS is installed, press enter, and we'll begin.
 EOM
@@ -43,7 +36,7 @@ read
 # - generates metadata for all subprojects
 # - skips metadata gen for the root project (-x :eclipse) to work
 #   around Eclipse's inability to import hierarchical project structures
-COMMAND="./gradlew cleanEclipse :spring-oxm:compileTestJava eclipse -x :eclipse"
+COMMAND="./gradlew --no-daemon cleanEclipse :spring-oxm:compileTestJava eclipse -x :eclipse"
 
 cat <<EOM
 
@@ -85,7 +78,7 @@ EOM
 
 read
 
-COMMAND="./gradlew :eclipse"
+COMMAND="./gradlew --no-daemon :eclipse"
 
 cat <<EOM
 
@@ -113,7 +106,7 @@ cat <<EOM
 STEP 4: Import root project into Eclipse/STS
 
 Follow the project import steps listed in step 2 above to import the
-root project.
+root "spring" project.
 
 Press enter when complete, and move on to the final step.
 EOM

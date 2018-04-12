@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 package org.springframework.core.annotation;
 
-import static org.junit.Assert.*;
-
 import javax.annotation.Priority;
 
 import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 /**
  *
@@ -45,17 +45,17 @@ public class OrderUtilsTests {
 
 	@Test
 	public void getDefaultOrder() {
-		assertEquals(Integer.valueOf(33), OrderUtils.getOrder(NoOrder.class, 33));
+		assertEquals(33, OrderUtils.getOrder(NoOrder.class, 33));
 	}
 
 	@Test
 	public void getPriorityValueNoAnnotation() {
-		assertNull(OrderUtils.getPriorityValue(SimpleOrder.class));
+		assertNull(OrderUtils.getPriority(SimpleOrder.class));
 	}
 
 	@Test
 	public void getPriorityValue() {
-		assertEquals(Integer.valueOf(55), OrderUtils.getPriorityValue(OrderAndPriority.class));
+		assertEquals(Integer.valueOf(55), OrderUtils.getPriority(OrderAndPriority.class));
 	}
 
 	@Order(50)

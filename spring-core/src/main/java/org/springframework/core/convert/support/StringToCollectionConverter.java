@@ -24,6 +24,7 @@ import org.springframework.core.CollectionFactory;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.convert.TypeDescriptor;
 import org.springframework.core.convert.converter.ConditionalGenericConverter;
+import org.springframework.lang.Nullable;
 import org.springframework.util.StringUtils;
 
 /**
@@ -32,6 +33,7 @@ import org.springframework.util.StringUtils;
  * {@code String.class} can be converted to it.
  *
  * @author Keith Donald
+ * @author Juergen Hoeller
  * @since 3.0
  */
 final class StringToCollectionConverter implements ConditionalGenericConverter {
@@ -56,21 +58,26 @@ final class StringToCollectionConverter implements ConditionalGenericConverter {
 	}
 
 	@Override
-	public Object convert(Object source, TypeDescriptor sourceType, TypeDescriptor targetType) {
+	@Nullable
+	public Object convert(@Nullable Object source, TypeDescriptor sourceType, TypeDescriptor targetType) {
 		if (source == null) {
 			return null;
 		}
 		String string = (String) source;
+
 		String[] fields = StringUtils.commaDelimitedListToStringArray(string);
-		Collection<Object> target = CollectionFactory.createCollection(targetType.getType(), fields.length);
-		if (targetType.getElementTypeDescriptor() == null) {
+		TypeDescriptor elementDesc = targetType.getElementTypeDescriptor();
+		Collection<Object> target = CollectionFactory.createCollection(targetType.getType(),
+				(elementDesc != null ? elementDesc.getType() : null), fields.length);
+
+		if (elementDesc == null) {
 			for (String field : fields) {
 				target.add(field.trim());
 			}
 		}
 		else {
 			for (String field : fields) {
-				Object targetElement = this.conversionService.convert(field.trim(), sourceType, targetType.getElementTypeDescriptor());
+				Object targetElement = this.conversionService.convert(field.trim(), sourceType, elementDesc);
 				target.add(targetElement);
 			}
 		}

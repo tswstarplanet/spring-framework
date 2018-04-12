@@ -23,12 +23,13 @@ import java.util.Set;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.convert.TypeDescriptor;
 import org.springframework.core.convert.converter.ConditionalGenericConverter;
+import org.springframework.lang.Nullable;
 import org.springframework.util.ObjectUtils;
 
 /**
- * Converts an Array to a comma-delimited String.
- * This implementation first adapts the source Array to a List,
- * then delegates to {@link CollectionToStringConverter} to perform the target String conversion.
+ * Converts an array to a comma-delimited String. First adapts the source array
+ * to a List, then delegates to {@link CollectionToStringConverter} to perform
+ * the target String conversion.
  *
  * @author Keith Donald
  * @since 3.0
@@ -54,7 +55,8 @@ final class ArrayToStringConverter implements ConditionalGenericConverter {
 	}
 
 	@Override
-	public Object convert(Object source, TypeDescriptor sourceType, TypeDescriptor targetType) {
+	@Nullable
+	public Object convert(@Nullable Object source, TypeDescriptor sourceType, TypeDescriptor targetType) {
 		return this.helperConverter.convert(Arrays.asList(ObjectUtils.toObjectArray(source)), sourceType, targetType);
 	}
 

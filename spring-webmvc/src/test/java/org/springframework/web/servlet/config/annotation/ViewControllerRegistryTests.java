@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,23 +16,21 @@
 
 package org.springframework.web.servlet.config.annotation;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
 import java.util.Collections;
 import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
+
+import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.test.MockHttpServletRequest;
 import org.springframework.mock.web.test.MockHttpServletResponse;
 import org.springframework.web.servlet.handler.SimpleUrlHandlerMapping;
 import org.springframework.web.servlet.mvc.ParameterizableViewController;
 import org.springframework.web.servlet.view.RedirectView;
+
+import static org.junit.Assert.*;
 
 /**
  * Test fixture with a {@link ViewControllerRegistry}.
@@ -49,33 +47,38 @@ public class ViewControllerRegistryTests {
 
 
 	@Before
-	public void setUp() {
-		this.registry = new ViewControllerRegistry();
+	public void setup() {
+		this.registry = new ViewControllerRegistry(new StaticApplicationContext());
 		this.request = new MockHttpServletRequest("GET", "/");
 		this.response = new MockHttpServletResponse();
 	}
 
+
 	@Test
-	public void noViewControllers() throws Exception {
-		assertNull(this.registry.getHandlerMapping());
+	public void noViewControllers() {
+		assertNull(this.registry.buildHandlerMapping());
 	}
 
 	@Test
 	public void addViewController() {
 		this.registry.addViewController("/path").setViewName("viewName");
 		ParameterizableViewController controller = getController("/path");
+
 		assertEquals("viewName", controller.getViewName());
 		assertNull(controller.getStatusCode());
 		assertFalse(controller.isStatusOnly());
+		assertNotNull(controller.getApplicationContext());
 	}
 
 	@Test
 	public void addViewControllerWithDefaultViewName() {
 		this.registry.addViewController("/path");
 		ParameterizableViewController controller = getController("/path");
+
 		assertNull(controller.getViewName());
 		assertNull(controller.getStatusCode());
 		assertFalse(controller.isStatusOnly());
+		assertNotNull(controller.getApplicationContext());
 	}
 
 	@Test
@@ -88,6 +91,7 @@ public class ViewControllerRegistryTests {
 
 		assertEquals(302, this.response.getStatus());
 		assertEquals("/context/redirectTo", this.response.getRedirectedUrl());
+		assertNotNull(redirectView.getApplicationContext());
 	}
 
 	@Test
@@ -104,47 +108,45 @@ public class ViewControllerRegistryTests {
 
 		assertEquals(308, this.response.getStatus());
 		assertEquals("/redirectTo?a=b", response.getRedirectedUrl());
+		assertNotNull(redirectView.getApplicationContext());
 	}
 
 	@Test
 	public void addStatusController() {
 		this.registry.addStatusController("/path", HttpStatus.NOT_FOUND);
 		ParameterizableViewController controller = getController("/path");
+
 		assertNull(controller.getViewName());
 		assertEquals(HttpStatus.NOT_FOUND, controller.getStatusCode());
 		assertTrue(controller.isStatusOnly());
+		assertNotNull(controller.getApplicationContext());
 	}
-
 
 	@Test
 	public void order() {
 		this.registry.addViewController("/path");
-		SimpleUrlHandlerMapping handlerMapping = getHandlerMapping();
+		SimpleUrlHandlerMapping handlerMapping = this.registry.buildHandlerMapping();
 		assertEquals(1, handlerMapping.getOrder());
 
 		this.registry.setOrder(2);
-		handlerMapping = getHandlerMapping();
+		handlerMapping = this.registry.buildHandlerMapping();
 		assertEquals(2, handlerMapping.getOrder());
 	}
 
+
 	private ParameterizableViewController getController(String path) {
-		Map<String, ?> urlMap = getHandlerMapping().getUrlMap();
+		Map<String, ?> urlMap = this.registry.buildHandlerMapping().getUrlMap();
 		ParameterizableViewController controller = (ParameterizableViewController) urlMap.get(path);
 		assertNotNull(controller);
 		return controller;
 	}
 
-	private SimpleUrlHandlerMapping getHandlerMapping() {
-		return (SimpleUrlHandlerMapping) this.registry.getHandlerMapping();
-	}
-
 	private RedirectView getRedirectView(String path) {
-		ParameterizableViewController controller = getController("/path");
+		ParameterizableViewController controller = getController(path);
 		assertNull(controller.getViewName());
 		assertNotNull(controller.getView());
 		assertEquals(RedirectView.class, controller.getView().getClass());
 		return (RedirectView) controller.getView();
 	}
-
 
 }

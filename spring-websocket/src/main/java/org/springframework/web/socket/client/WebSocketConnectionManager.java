@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,14 @@ package org.springframework.web.socket.client;
 import java.util.List;
 
 import org.springframework.context.Lifecycle;
-import org.springframework.context.SmartLifecycle;
 import org.springframework.http.HttpHeaders;
+import org.springframework.lang.Nullable;
 import org.springframework.util.concurrent.ListenableFuture;
 import org.springframework.util.concurrent.ListenableFutureCallback;
 import org.springframework.web.socket.WebSocketHandler;
+import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.LoggingWebSocketHandlerDecorator;
-import org.springframework.web.socket.WebSocketHttpHeaders;
 
 /**
  * A WebSocket connection manager that is given a URI, a {@link WebSocketClient}, and a
@@ -43,6 +43,7 @@ public class WebSocketConnectionManager extends ConnectionManagerSupport {
 
 	private final WebSocketHandler webSocketHandler;
 
+	@Nullable
 	private WebSocketSession webSocketSession;
 
 	private WebSocketHttpHeaders headers = new WebSocketHttpHeaders();
@@ -85,13 +86,14 @@ public class WebSocketConnectionManager extends ConnectionManagerSupport {
 	/**
 	 * Set the origin to use.
 	 */
-	public void setOrigin(String origin) {
+	public void setOrigin(@Nullable String origin) {
 		this.headers.setOrigin(origin);
 	}
 
 	/**
-	 * @return the configured origin.
+	 * Return the configured origin.
 	 */
+	@Nullable
 	public String getOrigin() {
 		return this.headers.getOrigin();
 	}
@@ -130,33 +132,36 @@ public class WebSocketConnectionManager extends ConnectionManagerSupport {
 
 	@Override
 	protected void openConnection() {
-
-		logger.info("Connecting to WebSocket at " + getUri());
+		if (logger.isInfoEnabled()) {
+			logger.info("Connecting to WebSocket at " + getUri());
+		}
 
 		ListenableFuture<WebSocketSession> future =
 				this.client.doHandshake(this.webSocketHandler, this.headers, getUri());
 
 		future.addCallback(new ListenableFutureCallback<WebSocketSession>() {
 			@Override
-			public void onSuccess(WebSocketSession result) {
+			public void onSuccess(@Nullable WebSocketSession result) {
 				webSocketSession = result;
 				logger.info("Successfully connected");
 			}
 			@Override
-			public void onFailure(Throwable t) {
-				logger.error("Failed to connect", t);
+			public void onFailure(Throwable ex) {
+				logger.error("Failed to connect", ex);
 			}
 		});
 	}
 
 	@Override
 	protected void closeConnection() throws Exception {
-		this.webSocketSession.close();
+		if (this.webSocketSession != null) {
+			this.webSocketSession.close();
+		}
 	}
 
 	@Override
 	protected boolean isConnected() {
-		return ((this.webSocketSession != null) && (this.webSocketSession.isOpen()));
+		return (this.webSocketSession != null && this.webSocketSession.isOpen());
 	}
 
 }

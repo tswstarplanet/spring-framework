@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 
 package org.springframework.cache.config;
 
-import static org.springframework.context.annotation.AnnotationConfigUtils.*;
-
 import org.w3c.dom.Element;
 
 import org.springframework.aop.config.AopNamespaceUtils;
@@ -28,9 +26,9 @@ import org.springframework.beans.factory.parsing.CompositeComponentDefinition;
 import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.beans.factory.xml.BeanDefinitionParser;
 import org.springframework.beans.factory.xml.ParserContext;
-import org.springframework.cache.annotation.AnnotationCacheOperationSource;
 import org.springframework.cache.interceptor.BeanFactoryCacheOperationSourceAdvisor;
 import org.springframework.cache.interceptor.CacheInterceptor;
+import org.springframework.lang.Nullable;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
@@ -57,11 +55,19 @@ import org.springframework.util.StringUtils;
  */
 class AnnotationDrivenCacheBeanDefinitionParser implements BeanDefinitionParser {
 
+	private static final String CACHE_ASPECT_CLASS_NAME =
+			"org.springframework.cache.aspectj.AnnotationCacheAspect";
+
+	private static final String JCACHE_ASPECT_CLASS_NAME =
+			"org.springframework.cache.aspectj.JCacheCacheAspect";
+
 	private static final boolean jsr107Present = ClassUtils.isPresent(
 			"javax.cache.Cache", AnnotationDrivenCacheBeanDefinitionParser.class.getClassLoader());
 
-	private static final boolean jCacheImplPresent = ClassUtils.isPresent(
-			JCACHE_OPERATION_SOURCE_CLASS, AnnotationDrivenCacheBeanDefinitionParser.class.getClassLoader());
+	private static final boolean jcacheImplPresent = ClassUtils.isPresent(
+			"org.springframework.cache.jcache.interceptor.DefaultJCacheOperationSource",
+			AnnotationDrivenCacheBeanDefinitionParser.class.getClassLoader());
+
 
 	/**
 	 * Parses the '{@code <cache:annotation-driven>}' tag. Will
@@ -69,6 +75,7 @@ class AnnotationDrivenCacheBeanDefinitionParser implements BeanDefinitionParser 
 	 * register an AutoProxyCreator} with the container as necessary.
 	 */
 	@Override
+	@Nullable
 	public BeanDefinition parse(Element element, ParserContext parserContext) {
 		String mode = element.getAttribute("mode");
 		if ("aspectj".equals(mode)) {
@@ -85,7 +92,7 @@ class AnnotationDrivenCacheBeanDefinitionParser implements BeanDefinitionParser 
 
 	private void registerCacheAspect(Element element, ParserContext parserContext) {
 		SpringCachingConfigurer.registerCacheAspect(element, parserContext);
-		if (jsr107Present && jCacheImplPresent) { // Register JCache aspect
+		if (jsr107Present && jcacheImplPresent) {
 			JCacheCachingConfigurer.registerCacheAspect(element, parserContext);
 		}
 	}
@@ -93,7 +100,7 @@ class AnnotationDrivenCacheBeanDefinitionParser implements BeanDefinitionParser 
 	private void registerCacheAdvisor(Element element, ParserContext parserContext) {
 		AopNamespaceUtils.registerAutoProxyCreatorIfNecessary(parserContext, element);
 		SpringCachingConfigurer.registerCacheAdvisor(element, parserContext);
-		if (jsr107Present && jCacheImplPresent) { // Register JCache advisor
+		if (jsr107Present && jcacheImplPresent) {
 			JCacheCachingConfigurer.registerCacheAdvisor(element, parserContext);
 		}
 	}
@@ -122,17 +129,18 @@ class AnnotationDrivenCacheBeanDefinitionParser implements BeanDefinitionParser 
 		return def;
 	}
 
+
 	/**
 	 * Configure the necessary infrastructure to support the Spring's caching annotations.
 	 */
 	private static class SpringCachingConfigurer {
 
 		private static void registerCacheAdvisor(Element element, ParserContext parserContext) {
-			if (!parserContext.getRegistry().containsBeanDefinition(CACHE_ADVISOR_BEAN_NAME)) {
+			if (!parserContext.getRegistry().containsBeanDefinition(CacheManagementConfigUtils.CACHE_ADVISOR_BEAN_NAME)) {
 				Object eleSource = parserContext.extractSource(element);
 
 				// Create the CacheOperationSource definition.
-				RootBeanDefinition sourceDef = new RootBeanDefinition(AnnotationCacheOperationSource.class);
+				RootBeanDefinition sourceDef = new RootBeanDefinition("org.springframework.cache.annotation.AnnotationCacheOperationSource");
 				sourceDef.setSource(eleSource);
 				sourceDef.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
 				String sourceName = parserContext.getReaderContext().registerWithGeneratedName(sourceDef);
@@ -156,13 +164,12 @@ class AnnotationDrivenCacheBeanDefinitionParser implements BeanDefinitionParser 
 				if (element.hasAttribute("order")) {
 					advisorDef.getPropertyValues().add("order", element.getAttribute("order"));
 				}
-				parserContext.getRegistry().registerBeanDefinition(CACHE_ADVISOR_BEAN_NAME, advisorDef);
+				parserContext.getRegistry().registerBeanDefinition(CacheManagementConfigUtils.CACHE_ADVISOR_BEAN_NAME, advisorDef);
 
-				CompositeComponentDefinition compositeDef = new CompositeComponentDefinition(element.getTagName(),
-						eleSource);
+				CompositeComponentDefinition compositeDef = new CompositeComponentDefinition(element.getTagName(), eleSource);
 				compositeDef.addNestedComponent(new BeanComponentDefinition(sourceDef, sourceName));
 				compositeDef.addNestedComponent(new BeanComponentDefinition(interceptorDef, interceptorName));
-				compositeDef.addNestedComponent(new BeanComponentDefinition(advisorDef, CACHE_ADVISOR_BEAN_NAME));
+				compositeDef.addNestedComponent(new BeanComponentDefinition(advisorDef, CacheManagementConfigUtils.CACHE_ADVISOR_BEAN_NAME));
 				parserContext.registerComponent(compositeDef);
 			}
 		}
@@ -177,16 +184,17 @@ class AnnotationDrivenCacheBeanDefinitionParser implements BeanDefinitionParser 
 		 * </pre>
 		 */
 		private static void registerCacheAspect(Element element, ParserContext parserContext) {
-			if (!parserContext.getRegistry().containsBeanDefinition(CACHE_ASPECT_BEAN_NAME)) {
+			if (!parserContext.getRegistry().containsBeanDefinition(CacheManagementConfigUtils.CACHE_ASPECT_BEAN_NAME)) {
 				RootBeanDefinition def = new RootBeanDefinition();
 				def.setBeanClassName(CACHE_ASPECT_CLASS_NAME);
 				def.setFactoryMethodName("aspectOf");
 				parseCacheResolution(element, def, false);
 				CacheNamespaceHandler.parseKeyGenerator(element, def);
-				parserContext.registerBeanComponent(new BeanComponentDefinition(def, CACHE_ASPECT_BEAN_NAME));
+				parserContext.registerBeanComponent(new BeanComponentDefinition(def, CacheManagementConfigUtils.CACHE_ASPECT_BEAN_NAME));
 			}
 		}
 	}
+
 
 	/**
 	 * Configure the necessary infrastructure to support the standard JSR-107 caching annotations.
@@ -194,43 +202,44 @@ class AnnotationDrivenCacheBeanDefinitionParser implements BeanDefinitionParser 
 	private static class JCacheCachingConfigurer {
 
 		private static void registerCacheAdvisor(Element element, ParserContext parserContext) {
-			if (!parserContext.getRegistry().containsBeanDefinition(JCACHE_ADVISOR_BEAN_NAME)) {
-				Object eleSource = parserContext.extractSource(element);
+			if (!parserContext.getRegistry().containsBeanDefinition(CacheManagementConfigUtils.JCACHE_ADVISOR_BEAN_NAME)) {
+				Object source = parserContext.extractSource(element);
 
 				// Create the CacheOperationSource definition.
-				BeanDefinition sourceDef = createJCacheOperationSourceBeanDefinition(element, eleSource);
+				BeanDefinition sourceDef = createJCacheOperationSourceBeanDefinition(element, source);
 				String sourceName = parserContext.getReaderContext().registerWithGeneratedName(sourceDef);
 
 				// Create the CacheInterceptor definition.
-				RootBeanDefinition interceptorDef = new RootBeanDefinition(JCACHE_INTERCEPTOR_CLASS);
-				interceptorDef.setSource(eleSource);
+				RootBeanDefinition interceptorDef =
+						new RootBeanDefinition("org.springframework.cache.jcache.interceptor.JCacheInterceptor");
+				interceptorDef.setSource(source);
 				interceptorDef.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
 				interceptorDef.getPropertyValues().add("cacheOperationSource", new RuntimeBeanReference(sourceName));
 				parseErrorHandler(element, interceptorDef);
 				String interceptorName = parserContext.getReaderContext().registerWithGeneratedName(interceptorDef);
 
 				// Create the CacheAdvisor definition.
-				RootBeanDefinition advisorDef = new RootBeanDefinition(JCACHE_ADVISOR_FACTORY_CLASS);
-				advisorDef.setSource(eleSource);
+				RootBeanDefinition advisorDef = new RootBeanDefinition(
+						"org.springframework.cache.jcache.interceptor.BeanFactoryJCacheOperationSourceAdvisor");
+				advisorDef.setSource(source);
 				advisorDef.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
 				advisorDef.getPropertyValues().add("cacheOperationSource", new RuntimeBeanReference(sourceName));
 				advisorDef.getPropertyValues().add("adviceBeanName", interceptorName);
 				if (element.hasAttribute("order")) {
 					advisorDef.getPropertyValues().add("order", element.getAttribute("order"));
 				}
-				parserContext.getRegistry().registerBeanDefinition(JCACHE_ADVISOR_BEAN_NAME, advisorDef);
+				parserContext.getRegistry().registerBeanDefinition(CacheManagementConfigUtils.JCACHE_ADVISOR_BEAN_NAME, advisorDef);
 
-				CompositeComponentDefinition compositeDef = new CompositeComponentDefinition(element.getTagName(),
-						eleSource);
+				CompositeComponentDefinition compositeDef = new CompositeComponentDefinition(element.getTagName(), source);
 				compositeDef.addNestedComponent(new BeanComponentDefinition(sourceDef, sourceName));
 				compositeDef.addNestedComponent(new BeanComponentDefinition(interceptorDef, interceptorName));
-				compositeDef.addNestedComponent(new BeanComponentDefinition(advisorDef, JCACHE_ADVISOR_BEAN_NAME));
+				compositeDef.addNestedComponent(new BeanComponentDefinition(advisorDef, CacheManagementConfigUtils.JCACHE_ADVISOR_BEAN_NAME));
 				parserContext.registerComponent(compositeDef);
 			}
 		}
 
 		private static void registerCacheAspect(Element element, ParserContext parserContext) {
-			if (!parserContext.getRegistry().containsBeanDefinition(JCACHE_ASPECT_BEAN_NAME)) {
+			if (!parserContext.getRegistry().containsBeanDefinition(CacheManagementConfigUtils.JCACHE_ASPECT_BEAN_NAME)) {
 				Object eleSource = parserContext.extractSource(element);
 				RootBeanDefinition def = new RootBeanDefinition();
 				def.setBeanClassName(JCACHE_ASPECT_CLASS_NAME);
@@ -241,13 +250,13 @@ class AnnotationDrivenCacheBeanDefinitionParser implements BeanDefinitionParser 
 				def.getPropertyValues().add("cacheOperationSource", new RuntimeBeanReference(sourceName));
 
 				parserContext.registerBeanComponent(new BeanComponentDefinition(sourceDef, sourceName));
-				parserContext.registerBeanComponent(new BeanComponentDefinition(def, JCACHE_ASPECT_BEAN_NAME));
+				parserContext.registerBeanComponent(new BeanComponentDefinition(def, CacheManagementConfigUtils.JCACHE_ASPECT_BEAN_NAME));
 			}
 		}
 
-		private static RootBeanDefinition createJCacheOperationSourceBeanDefinition(
-				Element element, Object eleSource) {
-			RootBeanDefinition sourceDef = new RootBeanDefinition(JCACHE_OPERATION_SOURCE_CLASS);
+		private static RootBeanDefinition createJCacheOperationSourceBeanDefinition(Element element, @Nullable Object eleSource) {
+			RootBeanDefinition sourceDef =
+					new RootBeanDefinition("org.springframework.cache.jcache.interceptor.DefaultJCacheOperationSource");
 			sourceDef.setSource(eleSource);
 			sourceDef.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
 			// JSR-107 support should create an exception cache resolver with the cache manager

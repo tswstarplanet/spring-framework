@@ -42,25 +42,25 @@ public class TypePath {
      * A type path step that steps into the element type of an array type. See
      * {@link #getStep getStep}.
      */
-    public final static int ARRAY_ELEMENT = 0;
+    public static final int ARRAY_ELEMENT = 0;
 
     /**
      * A type path step that steps into the nested type of a class type. See
      * {@link #getStep getStep}.
      */
-    public final static int INNER_TYPE = 1;
+    public static final int INNER_TYPE = 1;
 
     /**
      * A type path step that steps into the bound of a wildcard type. See
      * {@link #getStep getStep}.
      */
-    public final static int WILDCARD_BOUND = 2;
+    public static final int WILDCARD_BOUND = 2;
 
     /**
      * A type path step that steps into a type argument of a generic type. See
      * {@link #getStep getStep}.
      */
-    public final static int TYPE_ARGUMENT = 3;
+    public static final int TYPE_ARGUMENT = 3;
 
     /**
      * The byte array where the path is stored, in Java class file format.
@@ -152,6 +152,9 @@ public class TypePath {
                     typeArg = typeArg * 10 + c - '0';
                     i += 1;
                 }
+                if (i < n && typePath.charAt(i) == ';') {
+                    i += 1;
+                }
                 out.put11(TYPE_ARGUMENT, typeArg);
             }
         }
@@ -164,7 +167,7 @@ public class TypePath {
      * ARRAY_ELEMENT} steps are represented with '[', {@link #INNER_TYPE
      * INNER_TYPE} steps with '.', {@link #WILDCARD_BOUND WILDCARD_BOUND} steps
      * with '*' and {@link #TYPE_ARGUMENT TYPE_ARGUMENT} steps with their type
-     * argument index in decimal form.
+     * argument index in decimal form followed by ';'.
      */
     @Override
     public String toString() {
@@ -182,7 +185,7 @@ public class TypePath {
                 result.append('*');
                 break;
             case TYPE_ARGUMENT:
-                result.append(getStepArgument(i));
+                result.append(getStepArgument(i)).append(';');
                 break;
             default:
                 result.append('_');

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package org.springframework.expression.spel.support;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 
 import org.springframework.core.MethodParameter;
 import org.springframework.core.convert.TypeDescriptor;
@@ -24,6 +25,7 @@ import org.springframework.expression.AccessException;
 import org.springframework.expression.EvaluationContext;
 import org.springframework.expression.MethodExecutor;
 import org.springframework.expression.TypedValue;
+import org.springframework.lang.Nullable;
 import org.springframework.util.ReflectionUtils;
 
 /**
@@ -35,9 +37,16 @@ public class ReflectiveMethodExecutor implements MethodExecutor {
 
 	private final Method method;
 
+	@Nullable
 	private final Integer varargsPosition;
 
+	private boolean computedPublicDeclaringClass = false;
+
+	@Nullable
+	private Class<?> publicDeclaringClass;
+
 	private boolean argumentConversionOccurred = false;
+
 
 	public ReflectiveMethodExecutor(Method method) {
 		this.method = method;
@@ -50,10 +59,49 @@ public class ReflectiveMethodExecutor implements MethodExecutor {
 		}
 	}
 
+
 	public Method getMethod() {
 		return this.method;
 	}
-	
+
+	/**
+	 * Find the first public class in the methods declaring class hierarchy that declares this method.
+	 * Sometimes the reflective method discovery logic finds a suitable method that can easily be
+	 * called via reflection but cannot be called from generated code when compiling the expression
+	 * because of visibility restrictions. For example if a non public class overrides toString(), this
+	 * helper method will walk up the type hierarchy to find the first public type that declares the
+	 * method (if there is one!). For toString() it may walk as far as Object.
+	 */
+	@Nullable
+	public Class<?> getPublicDeclaringClass() {
+		if (!this.computedPublicDeclaringClass) {
+			this.publicDeclaringClass = discoverPublicClass(this.method, this.method.getDeclaringClass());
+			this.computedPublicDeclaringClass = true;
+		}
+		return this.publicDeclaringClass;
+	}
+
+	@Nullable
+	private Class<?> discoverPublicClass(Method method, Class<?> clazz) {
+		if (Modifier.isPublic(clazz.getModifiers())) {
+			try {
+				clazz.getDeclaredMethod(method.getName(), method.getParameterTypes());
+				return clazz;
+			}
+			catch (NoSuchMethodException ex) {
+				// Continue below...
+			}
+		}
+		Class<?>[] ifcs = clazz.getInterfaces();
+		for (Class<?> ifc: ifcs) {
+			discoverPublicClass(method, ifc);
+		}
+		if (clazz.getSuperclass() != null) {
+			return discoverPublicClass(method, clazz.getSuperclass());
+		}
+		return null;
+	}
+
 	public boolean didArgumentConversionOccur() {
 		return this.argumentConversionOccurred;
 	}
@@ -62,11 +110,11 @@ public class ReflectiveMethodExecutor implements MethodExecutor {
 	@Override
 	public TypedValue execute(EvaluationContext context, Object target, Object... arguments) throws AccessException {
 		try {
-			if (arguments != null) {
-				this.argumentConversionOccurred = ReflectionHelper.convertArguments(context.getTypeConverter(), arguments, this.method, this.varargsPosition);
-			}
+			this.argumentConversionOccurred = ReflectionHelper.convertArguments(
+					context.getTypeConverter(), arguments, this.method, this.varargsPosition);
 			if (this.method.isVarArgs()) {
-				arguments = ReflectionHelper.setupArgumentsForVarargsInvocation(this.method.getParameterTypes(), arguments);
+				arguments = ReflectionHelper.setupArgumentsForVarargsInvocation(
+						this.method.getParameterTypes(), arguments);
 			}
 			ReflectionUtils.makeAccessible(this.method);
 			Object value = this.method.invoke(target, arguments);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,11 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.expression.spel.ast;
 
 import org.springframework.asm.MethodVisitor;
 import org.springframework.expression.TypedValue;
 import org.springframework.expression.spel.CodeFlow;
+import org.springframework.util.Assert;
 
 /**
  * Expression language AST node that represents an integer literal.
@@ -29,7 +31,8 @@ public class IntLiteral extends Literal {
 
 	private final TypedValue value;
 
-	IntLiteral(String payload, int pos, int value) {
+
+	public IntLiteral(String payload, int pos, int value) {
 		super(payload, pos);
 		this.value = new TypedValue(value);
 		this.exitTypeDescriptor = "I";
@@ -47,19 +50,20 @@ public class IntLiteral extends Literal {
 	}
 	
 	@Override
-	public void generateCode(MethodVisitor mv, CodeFlow codeflow) {
-		int intValue = ((Integer)this.value.getValue()).intValue();
-		if (intValue==-1) {
+	public void generateCode(MethodVisitor mv, CodeFlow cf) {
+		Integer intValue = (Integer) this.value.getValue();
+		Assert.state(intValue != null, "No int value");
+		if (intValue == -1) {
 			// Not sure we can get here because -1 is OpMinus
 			mv.visitInsn(ICONST_M1);
 		}
 		else if (intValue >= 0 && intValue < 6) {
-			mv.visitInsn(ICONST_0+intValue);			
+			mv.visitInsn(ICONST_0 + intValue);
 		}
 		else {
 			mv.visitLdcInsn(intValue);
 		}
-		codeflow.pushDescriptor(getExitDescriptor());
+		cf.pushDescriptor(this.exitTypeDescriptor);
 	}
 
 }

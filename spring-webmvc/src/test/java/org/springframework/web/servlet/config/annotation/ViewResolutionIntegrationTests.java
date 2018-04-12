@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,9 +16,13 @@
 
 package org.springframework.web.servlet.config.annotation;
 
+import java.io.IOException;
+import javax.servlet.ServletException;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.mock.web.test.MockHttpServletRequest;
@@ -35,10 +39,6 @@ import org.springframework.web.servlet.view.freemarker.FreeMarkerConfigurer;
 import org.springframework.web.servlet.view.freemarker.FreeMarkerViewResolver;
 import org.springframework.web.servlet.view.groovy.GroovyMarkupConfigurer;
 import org.springframework.web.servlet.view.tiles3.TilesConfigurer;
-import org.springframework.web.servlet.view.velocity.VelocityConfigurer;
-
-import javax.servlet.ServletException;
-import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 
@@ -61,12 +61,6 @@ public class ViewResolutionIntegrationTests {
 	}
 
 	@Test
-	public void velocity() throws Exception {
-		MockHttpServletResponse response = runTest(VelocityWebConfig.class);
-		assertEquals("<html><body>Hello World!</body></html>", response.getContentAsString());
-	}
-
-	@Test
 	public void tiles() throws Exception {
 		MockHttpServletResponse response = runTest(TilesWebConfig.class);
 		assertEquals("/WEB-INF/index.jsp", response.getForwardedUrl());
@@ -82,12 +76,6 @@ public class ViewResolutionIntegrationTests {
 	public void freemarkerInvalidConfig() throws Exception {
 		this.thrown.expectMessage("In addition to a FreeMarker view resolver ");
 		runTest(InvalidFreeMarkerWebConfig.class);
-	}
-
-	@Test
-	public void velocityInvalidConfig() throws Exception {
-		this.thrown.expectMessage("In addition to a Velocity view resolver ");
-		runTest(InvalidVelocityWebConfig.class);
 	}
 
 	@Test
@@ -140,7 +128,7 @@ public class ViewResolutionIntegrationTests {
 	}
 
 	@EnableWebMvc
-	static abstract class AbstractWebConfig extends WebMvcConfigurerAdapter {
+	static abstract class AbstractWebConfig implements WebMvcConfigurer {
 
 		@Bean
 		public SampleController sampleController() {
@@ -160,22 +148,6 @@ public class ViewResolutionIntegrationTests {
 		public FreeMarkerConfigurer freeMarkerConfigurer() {
 			FreeMarkerConfigurer configurer = new FreeMarkerConfigurer();
 			configurer.setTemplateLoaderPath("/WEB-INF/");
-			return configurer;
-		}
-	}
-
-	@Configuration
-	static class VelocityWebConfig extends AbstractWebConfig {
-
-		@Override
-		public void configureViewResolvers(ViewResolverRegistry registry) {
-			registry.velocity();
-		}
-
-		@Bean
-		public VelocityConfigurer velocityConfigurer() {
-			VelocityConfigurer configurer = new VelocityConfigurer();
-			configurer.setResourceLoaderPath("/WEB-INF/");
 			return configurer;
 		}
 	}
@@ -222,15 +194,6 @@ public class ViewResolutionIntegrationTests {
 	}
 
 	@Configuration
-	static class InvalidVelocityWebConfig extends WebMvcConfigurationSupport {
-
-		@Override
-		public void configureViewResolvers(ViewResolverRegistry registry) {
-			registry.velocity();
-		}
-	}
-
-	@Configuration
 	static class InvalidTilesWebConfig extends WebMvcConfigurationSupport {
 
 		@Override
@@ -256,9 +219,7 @@ public class ViewResolutionIntegrationTests {
 
 		@Bean
 		public FreeMarkerViewResolver freeMarkerViewResolver() {
-			FreeMarkerViewResolver viewResolver = new FreeMarkerViewResolver();
-			viewResolver.setSuffix(".ftl");
-			return viewResolver;
+			return new FreeMarkerViewResolver("", ".ftl");
 		}
 
 		@Bean

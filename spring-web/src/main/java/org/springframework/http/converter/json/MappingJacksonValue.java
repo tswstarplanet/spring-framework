@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,11 +16,14 @@
 
 package org.springframework.http.converter.json;
 
+import com.fasterxml.jackson.databind.ser.FilterProvider;
+
+import org.springframework.lang.Nullable;
+
 /**
  * A simple holder for the POJO to serialize via
- * {@link org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
- * MappingJackson2HttpMessageConverter} along with further serialization
- * instructions to be passed in to the converter.
+ * {@link MappingJackson2HttpMessageConverter} along with further
+ * serialization instructions to be passed in to the converter.
  *
  * <p>On the server side this wrapper is added with a
  * {@code ResponseBodyInterceptor} after content negotiation selects the
@@ -36,8 +39,13 @@ public class MappingJacksonValue {
 
 	private Object value;
 
+	@Nullable
 	private Class<?> serializationView;
 
+	@Nullable
+	private FilterProvider filters;
+
+	@Nullable
 	private String jsonpFunction;
 
 
@@ -69,7 +77,7 @@ public class MappingJacksonValue {
 	 * @see com.fasterxml.jackson.databind.ObjectMapper#writerWithView(Class)
 	 * @see com.fasterxml.jackson.annotation.JsonView
 	 */
-	public void setSerializationView(Class<?> serializationView) {
+	public void setSerializationView(@Nullable Class<?> serializationView) {
 		this.serializationView = serializationView;
 	}
 
@@ -78,20 +86,44 @@ public class MappingJacksonValue {
 	 * @see com.fasterxml.jackson.databind.ObjectMapper#writerWithView(Class)
 	 * @see com.fasterxml.jackson.annotation.JsonView
 	 */
+	@Nullable
 	public Class<?> getSerializationView() {
 		return this.serializationView;
 	}
 
 	/**
+	 * Set the Jackson filter provider to serialize the POJO with.
+	 * @since 4.2
+	 * @see com.fasterxml.jackson.databind.ObjectMapper#writer(FilterProvider)
+	 * @see com.fasterxml.jackson.annotation.JsonFilter
+	 * @see Jackson2ObjectMapperBuilder#filters(FilterProvider)
+	 */
+	public void setFilters(@Nullable FilterProvider filters) {
+		this.filters = filters;
+	}
+
+	/**
+	 * Return the Jackson filter provider to use.
+	 * @since 4.2
+	 * @see com.fasterxml.jackson.databind.ObjectMapper#writer(FilterProvider)
+	 * @see com.fasterxml.jackson.annotation.JsonFilter
+	 */
+	@Nullable
+	public FilterProvider getFilters() {
+		return this.filters;
+	}
+
+	/**
 	 * Set the name of the JSONP function name.
 	 */
-	public void setJsonpFunction(String functionName) {
+	public void setJsonpFunction(@Nullable String functionName) {
 		this.jsonpFunction = functionName;
 	}
 
 	/**
 	 * Return the configured JSONP function name.
 	 */
+	@Nullable
 	public String getJsonpFunction() {
 		return this.jsonpFunction;
 	}

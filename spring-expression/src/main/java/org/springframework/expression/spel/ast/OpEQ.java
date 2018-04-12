@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 package org.springframework.expression.spel.ast;
 
-import org.springframework.asm.Label;
 import org.springframework.asm.MethodVisitor;
+import org.springframework.expression.EvaluationContext;
 import org.springframework.expression.EvaluationException;
 import org.springframework.expression.spel.CodeFlow;
 import org.springframework.expression.spel.ExpressionState;
@@ -36,107 +36,60 @@ public class OpEQ extends Operator {
 		this.exitTypeDescriptor = "Z";
 	}
 
+
 	@Override
 	public BooleanTypedValue getValueInternal(ExpressionState state) throws EvaluationException {
 		Object left = getLeftOperand().getValueInternal(state).getValue();
 		Object right = getRightOperand().getValueInternal(state).getValue();
-		return BooleanTypedValue.forValue(equalityCheck(state, left, right));
+		this.leftActualDescriptor = CodeFlow.toDescriptorFromObject(left);
+		this.rightActualDescriptor = CodeFlow.toDescriptorFromObject(right);
+		return BooleanTypedValue.forValue(
+				equalityCheck(state.getEvaluationContext(), left, right));
 	}
-	
+
 	// This check is different to the one in the other numeric operators (OpLt/etc)
 	// because it allows for simple object comparison
 	@Override
 	public boolean isCompilable() {
 		SpelNodeImpl left = getLeftOperand();
-		SpelNodeImpl right= getRightOperand();
+		SpelNodeImpl right = getRightOperand();
 		if (!left.isCompilable() || !right.isCompilable()) {
 			return false;
 		}
-		String leftdesc = left.getExitDescriptor();
-		String rightdesc = right.getExitDescriptor();
-		if ((CodeFlow.isPrimitiveOrUnboxableSupportedNumberOrBoolean(leftdesc) ||
-				CodeFlow.isPrimitiveOrUnboxableSupportedNumber(rightdesc))) {
-			if (!CodeFlow.areBoxingCompatible(leftdesc, rightdesc)) {
-				return false;
-			}
-		}
-		return true;
+
+		String leftDesc = left.exitTypeDescriptor;
+		String rightDesc = right.exitTypeDescriptor;
+		DescriptorComparison dc = DescriptorComparison.checkNumericCompatibility(leftDesc,
+				rightDesc, this.leftActualDescriptor, this.rightActualDescriptor);
+		return (!dc.areNumbers || dc.areCompatible);
 	}
-	
+
 	@Override
-	public void generateCode(MethodVisitor mv, CodeFlow codeflow) {
-		String leftDesc = getLeftOperand().getExitDescriptor();
-		String rightDesc = getRightOperand().getExitDescriptor();
-		Label elseTarget = new Label();
-		Label endOfIf = new Label();
+	public void generateCode(MethodVisitor mv, CodeFlow cf) {
+		cf.loadEvaluationContext(mv);
+		String leftDesc = getLeftOperand().exitTypeDescriptor;
+		String rightDesc = getRightOperand().exitTypeDescriptor;
 		boolean leftPrim = CodeFlow.isPrimitive(leftDesc);
 		boolean rightPrim = CodeFlow.isPrimitive(rightDesc);
 
-		if ((CodeFlow.isPrimitiveOrUnboxableSupportedNumberOrBoolean(leftDesc) || 
-			 CodeFlow.isPrimitiveOrUnboxableSupportedNumberOrBoolean(rightDesc)) && 
-			 CodeFlow.areBoxingCompatible(leftDesc,rightDesc)) {
-			char targetType = CodeFlow.toPrimitiveTargetDesc(leftDesc);
-			
-			getLeftOperand().generateCode(mv, codeflow);
-			if (!leftPrim) {
-				CodeFlow.insertUnboxInsns(mv, targetType, false);
-			}
-		
-			getRightOperand().generateCode(mv, codeflow);
-			if (!rightPrim) {
-				CodeFlow.insertUnboxInsns(mv, targetType, false);
-			}
-			// assert: SpelCompiler.boxingCompatible(leftDesc, rightDesc)
-			if (targetType=='D') {
-				mv.visitInsn(DCMPL);
-				mv.visitJumpInsn(IFNE, elseTarget);
-			}
-			else if (targetType=='F') {
-				mv.visitInsn(FCMPL);		
-				mv.visitJumpInsn(IFNE, elseTarget);
-			}
-			else if (targetType=='J') {
-				mv.visitInsn(LCMP);		
-				mv.visitJumpInsn(IFNE, elseTarget);
-			}
-			else if (targetType=='I' || targetType=='Z') {
-				mv.visitJumpInsn(IF_ICMPNE, elseTarget);		
-			}
-			else {
-				throw new IllegalStateException("Unexpected descriptor "+leftDesc);
-			}
+		cf.enterCompilationScope();
+		getLeftOperand().generateCode(mv, cf);
+		cf.exitCompilationScope();
+		if (leftPrim) {
+			CodeFlow.insertBoxIfNecessary(mv, leftDesc.charAt(0));
 		}
-		else {
-			getLeftOperand().generateCode(mv, codeflow);
-			getRightOperand().generateCode(mv, codeflow);
-			Label leftNotNull = new Label();
-			mv.visitInsn(DUP_X1); // Dup right on the top of the stack
-			mv.visitJumpInsn(IFNONNULL,leftNotNull);
-				// Right is null!
-				mv.visitInsn(SWAP);
-				mv.visitInsn(POP); // remove it
-				Label rightNotNull = new Label();
-				mv.visitJumpInsn(IFNONNULL, rightNotNull);
-					// Left is null too
-					mv.visitInsn(ICONST_1);
-				mv.visitJumpInsn(GOTO, endOfIf);
-					mv.visitLabel(rightNotNull);
-					mv.visitInsn(ICONST_0);
-				mv.visitJumpInsn(GOTO,endOfIf);
-			
-			
-			mv.visitLabel(leftNotNull);
-			mv.visitMethodInsn(INVOKEVIRTUAL,"java/lang/Object","equals","(Ljava/lang/Object;)Z",false);
-			mv.visitLabel(endOfIf);
-			codeflow.pushDescriptor("Z");
-			return;
+		cf.enterCompilationScope();
+		getRightOperand().generateCode(mv, cf);
+		cf.exitCompilationScope();
+		if (rightPrim) {
+			CodeFlow.insertBoxIfNecessary(mv, rightDesc.charAt(0));
 		}
-		mv.visitInsn(ICONST_1);
-		mv.visitJumpInsn(GOTO,endOfIf);
-		mv.visitLabel(elseTarget);
-		mv.visitInsn(ICONST_0);
-		mv.visitLabel(endOfIf);
-		codeflow.pushDescriptor("Z");
+
+		String operatorClassName = Operator.class.getName().replace('.', '/');
+		String evaluationContextClassName = EvaluationContext.class.getName().replace('.', '/');
+		mv.visitMethodInsn(INVOKESTATIC, operatorClassName, "equalityCheck",
+				"(L" + evaluationContextClassName + ";Ljava/lang/Object;Ljava/lang/Object;)Z", false);
+		cf.pushDescriptor("Z");
 	}
 
 }
