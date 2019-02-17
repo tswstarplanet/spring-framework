@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ public final class ProducesRequestCondition extends AbstractRequestCondition<Pro
 	private static final ProducesRequestCondition EMPTY_CONDITION = new ProducesRequestCondition();
 
 	private static final List<ProduceMediaTypeExpression> MEDIA_TYPE_ALL_LIST =
-			Collections.singletonList(new ProduceMediaTypeExpression("*/*"));
+			Collections.singletonList(new ProduceMediaTypeExpression(MediaType.ALL_VALUE));
 
 
 	private final List<ProduceMediaTypeExpression> expressions;
@@ -207,7 +207,7 @@ public final class ProducesRequestCondition extends AbstractRequestCondition<Pro
 		if (!result.isEmpty()) {
 			return new ProducesRequestCondition(result, this.contentNegotiationManager);
 		}
-		else if (acceptedMediaTypes.contains(MediaType.ALL)) {
+		else if (MediaType.ALL.isPresentIn(acceptedMediaTypes)) {
 			return EMPTY_CONDITION;
 		}
 		else {
@@ -300,7 +300,7 @@ public final class ProducesRequestCondition extends AbstractRequestCondition<Pro
 
 	/**
 	 * Return the contained "produces" expressions or if that's empty, a list
-	 * with a {@code MediaType_ALL} expression.
+	 * with a {@value MediaType#ALL_VALUE} expression.
 	 */
 	private List<ProduceMediaTypeExpression> getExpressionsToCompare() {
 		return (this.expressions.isEmpty() ? MEDIA_TYPE_ALL_LIST : this.expressions);
