@@ -31,8 +31,6 @@ import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.beans.propertyeditors.CustomDateEditor;
 import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.lang.Nullable;
-import org.springframework.mock.web.test.MockHttpServletRequest;
-import org.springframework.mock.web.test.MockHttpServletResponse;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.WebDataBinder;
@@ -47,6 +45,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.context.support.GenericWebApplicationContext;
 import org.springframework.web.servlet.HandlerExecutionChain;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.testfixture.servlet.MockHttpServletRequest;
+import org.springframework.web.testfixture.servlet.MockHttpServletResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -116,7 +116,7 @@ class HandlerMethodAnnotationDetectionTests {
 	}
 
 
-	@ParameterizedTest(name = "controller [{0}], auto-proxy [{1}]")
+	@ParameterizedTest(name = "[{index}] controller [{0}], auto-proxy [{1}]")
 	@MethodSource("handlerTypes")
 	void testRequestMappingMethod(Class<?> controllerType, boolean useAutoProxy) throws Exception {
 		setUp(controllerType, useAutoProxy);

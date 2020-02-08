@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+
 import javax.servlet.ServletException;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -33,9 +34,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.ResourceHttpMessageConverter;
-import org.springframework.mock.web.test.MockHttpServletRequest;
-import org.springframework.mock.web.test.MockHttpServletResponse;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.testfixture.servlet.MockHttpServletRequest;
+import org.springframework.web.testfixture.servlet.MockHttpServletResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

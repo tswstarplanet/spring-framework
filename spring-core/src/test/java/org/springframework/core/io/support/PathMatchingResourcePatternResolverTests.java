@@ -16,6 +16,7 @@
 
 package org.springframework.core.io.support;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,8 +53,8 @@ class PathMatchingResourcePatternResolverTests {
 	private static final String[] TEST_CLASSES_IN_CORE_IO_SUPPORT =
 			new String[] {"PathMatchingResourcePatternResolverTests.class"};
 
-	private static final String[] CLASSES_IN_REACTIVESTREAMS =
-			new String[] {"Processor.class", "Publisher.class", "Subscriber.class", "Subscription.class"};
+	private static final String[] CLASSES_IN_REACTOR_UTIL_ANNOTATIONS =
+			new String[] {"NonNull.class", "NonNullApi.class", "Nullable.class"};
 
 	private PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
 
@@ -97,15 +98,22 @@ class PathMatchingResourcePatternResolverTests {
 	}
 
 	@Test
+	void getResourcesOnFileSystemContainingHashtagsInTheirFileNames() throws IOException {
+		Resource[] resources = resolver.getResources("classpath*:org/springframework/core/io/**/resource#test*.txt");
+		assertThat(resources).extracting(Resource::getFile).extracting(File::getName)
+			.containsExactlyInAnyOrder("resource#test1.txt", "resource#test2.txt");
+	}
+
+	@Test
 	void classpathWithPatternInJar() throws IOException {
-		Resource[] resources = resolver.getResources("classpath:org/reactivestreams/*.class");
-		assertProtocolAndFilenames(resources, "jar", CLASSES_IN_REACTIVESTREAMS);
+		Resource[] resources = resolver.getResources("classpath:reactor/util/annotation/*.class");
+		assertProtocolAndFilenames(resources, "jar", CLASSES_IN_REACTOR_UTIL_ANNOTATIONS);
 	}
 
 	@Test
 	void classpathStarWithPatternInJar() throws IOException {
-		Resource[] resources = resolver.getResources("classpath*:org/reactivestreams/*.class");
-		assertProtocolAndFilenames(resources, "jar", CLASSES_IN_REACTIVESTREAMS);
+		Resource[] resources = resolver.getResources("classpath*:reactor/util/annotation/*.class");
+		assertProtocolAndFilenames(resources, "jar", CLASSES_IN_REACTOR_UTIL_ANNOTATIONS);
 	}
 
 	@Test

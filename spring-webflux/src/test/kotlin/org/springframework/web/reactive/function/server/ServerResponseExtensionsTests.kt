@@ -20,10 +20,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.reactivex.Flowable
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.reactivestreams.Publisher
 import org.springframework.core.ParameterizedTypeReference
@@ -45,21 +44,21 @@ class ServerResponseExtensionsTests {
 	@Test
 	fun `BodyBuilder#body with Publisher and reified type parameters`() {
 		val body = mockk<Publisher<List<Foo>>>()
-		bodyBuilder.bodyWithType(body)
+		bodyBuilder.body(body)
 		verify { bodyBuilder.body(body, object : ParameterizedTypeReference<List<Foo>>() {}) }
 	}
 
 	@Test
 	fun `BodyBuilder#body with CompletableFuture and reified type parameters`() {
 		val body = mockk<CompletableFuture<List<Foo>>>()
-		bodyBuilder.bodyWithType<List<Foo>>(body)
+		bodyBuilder.body<List<Foo>>(body)
 		verify { bodyBuilder.body(body, object : ParameterizedTypeReference<List<Foo>>() {}) }
 	}
 
 	@Test
 	fun `BodyBuilder#body with Flowable and reified type parameters`() {
 		val body = mockk<Flowable<List<Foo>>>()
-		bodyBuilder.bodyWithType(body)
+		bodyBuilder.body(body)
 		verify { bodyBuilder.body(body, object : ParameterizedTypeReference<List<Foo>>() {}) }
 	}
 
@@ -69,7 +68,7 @@ class ServerResponseExtensionsTests {
 		val body = "foo"
 		every { bodyBuilder.bodyValue(ofType<String>()) } returns Mono.just(response)
 		runBlocking {
-			bodyBuilder.bodyAndAwait(body)
+			bodyBuilder.bodyValueAndAwait(body)
 		}
 		verify {
 			bodyBuilder.bodyValue(ofType<String>())
@@ -77,7 +76,6 @@ class ServerResponseExtensionsTests {
 	}
 
 	@Test
-	@ExperimentalCoroutinesApi
 	fun `BodyBuilder#bodyAndAwait with flow parameter`() {
 		val response = mockk<ServerResponse>()
 		val body = mockk<Flow<List<Foo>>>()
@@ -145,7 +143,7 @@ class ServerResponseExtensionsTests {
 		val builder = mockk<ServerResponse.HeadersBuilder<*>>()
 		every { builder.build() } returns Mono.just(response)
 		runBlocking {
-			assertEquals(response, builder.buildAndAwait())
+			assertThat(builder.buildAndAwait()).isEqualTo(response)
 		}
 	}
 
